@@ -515,7 +515,7 @@ SELECT
     f_geometry_column AS geom,
     srid,
     type,
-    CAST(114 AS TINYINT) AS relkind,
+    CAST(NULL AS TINYINT) AS relkind,
     CAST(FALSE AS BOOLEAN) AS geom_idx,
     CAST(NULL AS VARCHAR) AS description,
     '{}' AS properties
