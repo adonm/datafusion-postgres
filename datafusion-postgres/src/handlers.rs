@@ -180,11 +180,12 @@ impl SimpleQueryHandler for DfSessionService {
             .replace("::Geography", "::bytea")
             .replace("::GEOGRAPHY", "::bytea");
 
-        let statements = self
+        let mut statements = self
             .parser
             .sql_parser
             .parse(&query)
             .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+        rewrite_pg_overlap(&mut statements);
 
         // empty query
         if statements.is_empty() {
@@ -419,6 +420,7 @@ impl QueryParser for Parser {
             .sql_parser
             .parse(&sql)
             .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+        rewrite_pg_overlap(&mut statements);
         if statements.is_empty() {
             return Ok((sql, None));
         }
@@ -944,5 +946,99 @@ mod tests {
         .unwrap();
 
         assert!(matches!(&responses[0], Response::Query(_)));
+    }
+}
+
+/// Walk a parsed SQL statement and rewrite PostGIS `&&` (PGOverlap) operators
+/// to `st_overlaps_bbox(left, right)` function calls. DataFusion's planner
+/// doesn't recognize PGOverlap; this rewrite makes it transparent.
+fn rewrite_pg_overlap(statements: &mut [sqlparser::ast::Statement]) {
+    for stmt in statements.iter_mut() {
+        rewrite_pg_overlap_stmt(stmt);
+    }
+}
+
+fn rewrite_pg_overlap_stmt(stmt: &mut sqlparser::ast::Statement) {
+    match stmt {
+        sqlparser::ast::Statement::Query(q) => {
+            rewrite_pg_overlap_query(q);
+        }
+        _ => {}
+    }
+}
+
+fn rewrite_pg_overlap_query(q: &mut sqlparser::ast::Query) {
+    rewrite_pg_overlap_set_expr(&mut q.body);
+}
+
+fn rewrite_pg_overlap_set_expr(expr: &mut sqlparser::ast::SetExpr) {
+    match expr {
+        sqlparser::ast::SetExpr::Select(select) => {
+            if let Some(selection) = select.selection.as_mut() {
+                rewrite_pg_overlap_expr(selection);
+            }
+            for expr in select.projection.iter_mut() {
+                rewrite_pg_overlap_select_item(expr);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn rewrite_pg_overlap_select_item(item: &mut sqlparser::ast::SelectItem) {
+    match item {
+        sqlparser::ast::SelectItem::ExprWithAlias { expr, .. }
+        | sqlparser::ast::SelectItem::UnnamedExpr(expr) => {
+            rewrite_pg_overlap_expr(expr);
+        }
+        _ => {}
+    }
+}
+
+fn rewrite_pg_overlap_expr(expr: &mut sqlparser::ast::Expr) {
+    match expr {
+        sqlparser::ast::Expr::BinaryOp { left, op, right }
+            if *op == sqlparser::ast::BinaryOperator::PGOverlap =>
+        {
+            let left = std::mem::replace(left.as_mut(), sqlparser::ast::Expr::Value(sqlparser::ast::Value::Null.with_empty_span()));
+            let right = std::mem::replace(right.as_mut(), sqlparser::ast::Expr::Value(sqlparser::ast::Value::Null.with_empty_span()));
+            *expr = sqlparser::ast::Expr::Function(sqlparser::ast::Function {
+                name: sqlparser::ast::ObjectName(vec![sqlparser::ast::ObjectNamePart::Identifier(sqlparser::ast::Ident::new(
+                    "st_overlaps_bbox",
+                ))]),
+                uses_odbc_syntax: false,
+                parameters: sqlparser::ast::FunctionArguments::None,
+                args: sqlparser::ast::FunctionArguments::List(sqlparser::ast::FunctionArgumentList {
+                    duplicate_treatment: None,
+                    args: vec![
+                        sqlparser::ast::FunctionArg::Unnamed(
+                            sqlparser::ast::FunctionArgExpr::Expr(left),
+                        ),
+                        sqlparser::ast::FunctionArg::Unnamed(
+                            sqlparser::ast::FunctionArgExpr::Expr(right),
+                        ),
+                    ],
+                    clauses: vec![],
+                }),
+                filter: None,
+                null_treatment: None,
+                over: None,
+                within_group: vec![],
+            });
+        }
+        sqlparser::ast::Expr::BinaryOp { left, right, .. } => {
+            rewrite_pg_overlap_expr(left);
+            rewrite_pg_overlap_expr(right);
+        }
+        sqlparser::ast::Expr::Nested(inner) => {
+            rewrite_pg_overlap_expr(inner);
+        }
+        sqlparser::ast::Expr::IsTrue(inner)
+        | sqlparser::ast::Expr::IsNotTrue(inner)
+        | sqlparser::ast::Expr::IsFalse(inner)
+        | sqlparser::ast::Expr::IsNotFalse(inner) => {
+            rewrite_pg_overlap_expr(inner);
+        }
+        _ => {}
     }
 }
