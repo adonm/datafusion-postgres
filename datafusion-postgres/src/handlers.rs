@@ -505,7 +505,12 @@ fn preprocess_quackgis_sql(sql: &str) -> String {
         .replace("::GEOGRAPHY", "::bytea")
         .replace("::jsonb", "::varchar")
         .replace("::Jsonb", "::varchar")
-        .replace("::JSONB", "::varchar");
+        .replace("::JSONB", "::varchar")
+        // DataFusion does not support PostgreSQL named function arguments.
+        // Martin uses this optional ST_TileEnvelope margin for bbox filtering;
+        // QuackGIS accepts a 4th positional Float64 as a margin-with-default-
+        // bounds compatibility overload.
+        .replace(", margin => 0.015625", ", 0.015625");
 
     if is_martin_available_tables_query(&sql) {
         return r#"
@@ -625,6 +630,16 @@ mod tests {
                 Some(DataType::Int64),
                 Some(DataType::Utf8)
             ]
+        );
+    }
+
+    #[test]
+    fn test_preprocess_quackgis_sql_strips_martin_tileenvelope_margin() {
+        let sql = "SELECT ST_TileEnvelope($1::integer, $2::integer, $3::integer, margin => 0.015625)";
+
+        assert_eq!(
+            preprocess_quackgis_sql(sql),
+            "SELECT ST_TileEnvelope($1::integer, $2::integer, $3::integer, 0.015625)"
         );
     }
 
