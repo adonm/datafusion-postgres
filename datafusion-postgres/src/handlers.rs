@@ -1070,6 +1070,10 @@ fn rewrite_pg_overlap_expr(expr: &mut sqlparser::ast::Expr) {
         sqlparser::ast::Expr::Nested(inner) => {
             rewrite_pg_overlap_expr(inner);
         }
+        sqlparser::ast::Expr::Function(func) => {
+            rewrite_pg_overlap_function_args(func);
+            rewrite_postgis_st_asmvt_record_arg(func);
+        }
         sqlparser::ast::Expr::IsTrue(inner)
         | sqlparser::ast::Expr::IsNotTrue(inner)
         | sqlparser::ast::Expr::IsFalse(inner)
@@ -1078,4 +1082,62 @@ fn rewrite_pg_overlap_expr(expr: &mut sqlparser::ast::Expr) {
         }
         _ => {}
     }
+}
+
+fn rewrite_pg_overlap_function_args(func: &mut sqlparser::ast::Function) {
+    if let sqlparser::ast::FunctionArguments::List(list) = &mut func.args {
+        for arg in list.args.iter_mut() {
+            if let sqlparser::ast::FunctionArg::Unnamed(
+                sqlparser::ast::FunctionArgExpr::Expr(expr),
+            ) = arg
+            {
+                rewrite_pg_overlap_expr(expr);
+            }
+        }
+    }
+}
+
+/// Minimal Martin/PostGIS compatibility: PostgreSQL lets `ST_AsMVT(tile, ...,
+/// 'geom')` pass a whole subquery row (`tile`) to the aggregate. DataFusion has
+/// no record pseudo-type, but Martin's generated query always includes the MVT
+/// geometry column name as the 4th argument. Rewrite the record form to the
+/// geometry-only form that QuackGIS implements: `ST_AsMVT(tile.geom)`.
+fn rewrite_postgis_st_asmvt_record_arg(func: &mut sqlparser::ast::Function) {
+    let Some(name) = func.name.0.last() else {
+        return;
+    };
+    if !name.to_string().eq_ignore_ascii_case("st_asmvt") {
+        return;
+    }
+
+    let sqlparser::ast::FunctionArguments::List(list) = &mut func.args else {
+        return;
+    };
+    if list.args.len() < 4 {
+        return;
+    }
+
+    let alias = match &list.args[0] {
+        sqlparser::ast::FunctionArg::Unnamed(sqlparser::ast::FunctionArgExpr::Expr(
+            sqlparser::ast::Expr::Identifier(ident),
+        )) => ident.value.clone(),
+        _ => return,
+    };
+    let geom_col = match &list.args[3] {
+        sqlparser::ast::FunctionArg::Unnamed(sqlparser::ast::FunctionArgExpr::Expr(
+            sqlparser::ast::Expr::Value(value),
+        )) => match &value.value {
+            sqlparser::ast::Value::SingleQuotedString(s)
+            | sqlparser::ast::Value::DoubleQuotedString(s) => s.clone(),
+            _ => return,
+        },
+        _ => return,
+    };
+
+    list.args = vec![sqlparser::ast::FunctionArg::Unnamed(
+        sqlparser::ast::FunctionArgExpr::Expr(sqlparser::ast::Expr::CompoundIdentifier(vec![
+            sqlparser::ast::Ident::new(alias),
+            sqlparser::ast::Ident::new(geom_col),
+        ])),
+    )];
 }
