@@ -393,6 +393,7 @@ dependencies = [
  "postgis",
  "postgres-types",
  "rust_decimal",
+ "serde_json",
  "tokio",
 ]
 

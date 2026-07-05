@@ -524,6 +524,22 @@ FROM geometry_columns
         .to_string();
     }
 
+    if is_martin_available_functions_query(&sql) {
+        return r#"
+SELECT
+    CAST(NULL AS VARCHAR) AS schema,
+    CAST(NULL AS VARCHAR) AS name,
+    CAST(NULL AS VARCHAR) AS output_type,
+    CAST(NULL AS VARCHAR) AS output_record_types,
+    CAST(NULL AS VARCHAR) AS output_record_names,
+    CAST(NULL AS VARCHAR) AS input_types,
+    CAST(NULL AS VARCHAR) AS input_names,
+    CAST(NULL AS VARCHAR) AS description
+WHERE FALSE
+"#
+        .to_string();
+    }
+
     sql
 }
 
@@ -533,6 +549,13 @@ fn is_martin_available_tables_query(sql: &str) -> bool {
         && sql.contains("jsonb_object_agg")
         && sql.contains("FROM geometry_columns")
         && sql.contains("FROM geography_columns")
+}
+
+fn is_martin_available_functions_query(sql: &str) -> bool {
+    sql.contains("jsonb_array_length(inputs.input_names)")
+        && sql.contains("information_schema.routines")
+        && sql.contains("information_schema.parameters")
+        && sql.contains("inputs.input_types ->> 0")
 }
 
 #[cfg(test)]
