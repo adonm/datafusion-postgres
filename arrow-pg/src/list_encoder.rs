@@ -52,8 +52,7 @@ use crate::error::ToSqlError;
 use crate::struct_encoder::encode_structs;
 
 fn get_bool_list_value(arr: &Arc<dyn Array>) -> Vec<Option<bool>> {
-    arr.as_any()
-        .downcast_ref::<BooleanArray>()
+    arr.as_any().downcast_ref::<BooleanArray>()
         .unwrap()
         .iter()
         .collect()
@@ -62,8 +61,7 @@ fn get_bool_list_value(arr: &Arc<dyn Array>) -> Vec<Option<bool>> {
 macro_rules! get_primitive_list_value {
     ($name:ident, $t:ty, $pt:ty) => {
         fn $name(arr: &Arc<dyn Array>) -> Vec<Option<$pt>> {
-            arr.as_any()
-                .downcast_ref::<PrimitiveArray<$t>>()
+            arr.as_any().downcast_ref::<PrimitiveArray<$t>>()
                 .unwrap()
                 .iter()
                 .collect()
@@ -72,8 +70,7 @@ macro_rules! get_primitive_list_value {
 
     ($name:ident, $t:ty, $pt:ty, $f:expr) => {
         fn $name(arr: &Arc<dyn Array>) -> Vec<Option<$pt>> {
-            arr.as_any()
-                .downcast_ref::<PrimitiveArray<$t>>()
+            arr.as_any().downcast_ref::<PrimitiveArray<$t>>()
                 .unwrap()
                 .iter()
                 .map(|val| val.map($f))
@@ -155,8 +152,7 @@ pub fn encode_list<T: Encoder>(
         }
         DataType::Decimal128(_, s) => {
             let value: Vec<_> = arr
-                .as_any()
-                .downcast_ref::<Decimal128Array>()
+                .as_any().downcast_ref::<Decimal128Array>()
                 .unwrap()
                 .iter()
                 .map(|ov| ov.map(|v| Decimal::from_i128_with_scale(v, *s as u32)))
@@ -165,8 +161,7 @@ pub fn encode_list<T: Encoder>(
         }
         DataType::Utf8 => {
             let value: Vec<Option<&str>> = arr
-                .as_any()
-                .downcast_ref::<StringArray>()
+                .as_any().downcast_ref::<StringArray>()
                 .unwrap()
                 .iter()
                 .collect();
@@ -174,8 +169,7 @@ pub fn encode_list<T: Encoder>(
         }
         DataType::Utf8View => {
             let value: Vec<Option<&str>> = arr
-                .as_any()
-                .downcast_ref::<StringViewArray>()
+                .as_any().downcast_ref::<StringViewArray>()
                 .unwrap()
                 .iter()
                 .collect();
@@ -183,8 +177,7 @@ pub fn encode_list<T: Encoder>(
         }
         DataType::Binary => {
             let value: Vec<Option<_>> = arr
-                .as_any()
-                .downcast_ref::<BinaryArray>()
+                .as_any().downcast_ref::<BinaryArray>()
                 .unwrap()
                 .iter()
                 .collect();
@@ -192,8 +185,7 @@ pub fn encode_list<T: Encoder>(
         }
         DataType::LargeBinary => {
             let value: Vec<Option<_>> = arr
-                .as_any()
-                .downcast_ref::<LargeBinaryArray>()
+                .as_any().downcast_ref::<LargeBinaryArray>()
                 .unwrap()
                 .iter()
                 .collect();
@@ -201,8 +193,7 @@ pub fn encode_list<T: Encoder>(
         }
         DataType::BinaryView => {
             let value: Vec<Option<_>> = arr
-                .as_any()
-                .downcast_ref::<BinaryViewArray>()
+                .as_any().downcast_ref::<BinaryViewArray>()
                 .unwrap()
                 .iter()
                 .collect();
@@ -211,8 +202,7 @@ pub fn encode_list<T: Encoder>(
 
         DataType::Date32 => {
             let value: Vec<Option<_>> = arr
-                .as_any()
-                .downcast_ref::<Date32Array>()
+                .as_any().downcast_ref::<Date32Array>()
                 .unwrap()
                 .iter()
                 .map(|val| val.and_then(|x| as_date::<Date32Type>(x as i64)))
@@ -221,8 +211,7 @@ pub fn encode_list<T: Encoder>(
         }
         DataType::Date64 => {
             let value: Vec<Option<_>> = arr
-                .as_any()
-                .downcast_ref::<Date64Array>()
+                .as_any().downcast_ref::<Date64Array>()
                 .unwrap()
                 .iter()
                 .map(|val| val.and_then(as_date::<Date64Type>))
@@ -232,8 +221,7 @@ pub fn encode_list<T: Encoder>(
         DataType::Time32(unit) => match unit {
             TimeUnit::Second => {
                 let value: Vec<Option<_>> = arr
-                    .as_any()
-                    .downcast_ref::<Time32SecondArray>()
+                    .as_any().downcast_ref::<Time32SecondArray>()
                     .unwrap()
                     .iter()
                     .map(|val| val.and_then(|x| as_time::<Time32SecondType>(x as i64)))
@@ -242,8 +230,7 @@ pub fn encode_list<T: Encoder>(
             }
             TimeUnit::Millisecond => {
                 let value: Vec<Option<_>> = arr
-                    .as_any()
-                    .downcast_ref::<Time32MillisecondArray>()
+                    .as_any().downcast_ref::<Time32MillisecondArray>()
                     .unwrap()
                     .iter()
                     .map(|val| val.and_then(|x| as_time::<Time32MillisecondType>(x as i64)))
@@ -259,8 +246,7 @@ pub fn encode_list<T: Encoder>(
         DataType::Time64(unit) => match unit {
             TimeUnit::Microsecond => {
                 let value: Vec<Option<_>> = arr
-                    .as_any()
-                    .downcast_ref::<Time64MicrosecondArray>()
+                    .as_any().downcast_ref::<Time64MicrosecondArray>()
                     .unwrap()
                     .iter()
                     .map(|val| val.and_then(as_time::<Time64MicrosecondType>))
@@ -269,8 +255,7 @@ pub fn encode_list<T: Encoder>(
             }
             TimeUnit::Nanosecond => {
                 let value: Vec<Option<_>> = arr
-                    .as_any()
-                    .downcast_ref::<Time64NanosecondArray>()
+                    .as_any().downcast_ref::<Time64NanosecondArray>()
                     .unwrap()
                     .iter()
                     .map(|val| val.and_then(as_time::<Time64NanosecondType>))
@@ -286,8 +271,7 @@ pub fn encode_list<T: Encoder>(
         DataType::Timestamp(unit, timezone) => match unit {
             TimeUnit::Second => {
                 let array_iter = arr
-                    .as_any()
-                    .downcast_ref::<TimestampSecondArray>()
+                    .as_any().downcast_ref::<TimestampSecondArray>()
                     .unwrap()
                     .iter();
 
@@ -317,8 +301,7 @@ pub fn encode_list<T: Encoder>(
             }
             TimeUnit::Millisecond => {
                 let array_iter = arr
-                    .as_any()
-                    .downcast_ref::<TimestampMillisecondArray>()
+                    .as_any().downcast_ref::<TimestampMillisecondArray>()
                     .unwrap()
                     .iter();
 
@@ -349,8 +332,7 @@ pub fn encode_list<T: Encoder>(
             }
             TimeUnit::Microsecond => {
                 let array_iter = arr
-                    .as_any()
-                    .downcast_ref::<TimestampMicrosecondArray>()
+                    .as_any().downcast_ref::<TimestampMicrosecondArray>()
                     .unwrap()
                     .iter();
 
@@ -381,8 +363,7 @@ pub fn encode_list<T: Encoder>(
             }
             TimeUnit::Nanosecond => {
                 let array_iter = arr
-                    .as_any()
-                    .downcast_ref::<TimestampNanosecondArray>()
+                    .as_any().downcast_ref::<TimestampNanosecondArray>()
                     .unwrap()
                     .iter();
 
@@ -411,8 +392,7 @@ pub fn encode_list<T: Encoder>(
         DataType::Struct(arrow_fields) => encode_structs(encoder, &arr, arrow_fields, pg_field),
         DataType::LargeUtf8 => {
             let value: Vec<Option<&str>> = arr
-                .as_any()
-                .downcast_ref::<LargeStringArray>()
+                .as_any().downcast_ref::<LargeStringArray>()
                 .unwrap()
                 .iter()
                 .collect();
@@ -458,8 +438,7 @@ pub fn encode_list<T: Encoder>(
         DataType::Duration(unit) => match unit {
             TimeUnit::Second => {
                 let value: Vec<Option<PgInterval>> = arr
-                    .as_any()
-                    .downcast_ref::<DurationSecondArray>()
+                    .as_any().downcast_ref::<DurationSecondArray>()
                     .unwrap()
                     .iter()
                     .map(|val| val.map(|v| PgInterval::new(0, 0, v * 1_000_000i64)))
@@ -469,8 +448,7 @@ pub fn encode_list<T: Encoder>(
             }
             TimeUnit::Millisecond => {
                 let value: Vec<Option<PgInterval>> = arr
-                    .as_any()
-                    .downcast_ref::<DurationMillisecondArray>()
+                    .as_any().downcast_ref::<DurationMillisecondArray>()
                     .unwrap()
                     .iter()
                     .map(|val| val.map(|v| PgInterval::new(0, 0, v * 1_000i64)))
@@ -480,8 +458,7 @@ pub fn encode_list<T: Encoder>(
             }
             TimeUnit::Microsecond => {
                 let value: Vec<Option<PgInterval>> = arr
-                    .as_any()
-                    .downcast_ref::<DurationMicrosecondArray>()
+                    .as_any().downcast_ref::<DurationMicrosecondArray>()
                     .unwrap()
                     .iter()
                     .map(|val| val.map(|v| PgInterval::new(0, 0, v)))
@@ -491,8 +468,7 @@ pub fn encode_list<T: Encoder>(
             }
             TimeUnit::Nanosecond => {
                 let value: Vec<Option<PgInterval>> = arr
-                    .as_any()
-                    .downcast_ref::<DurationNanosecondArray>()
+                    .as_any().downcast_ref::<DurationNanosecondArray>()
                     .unwrap()
                     .iter()
                     .map(|val| val.map(|v| PgInterval::new(0, 0, v / 1_000i64)))
@@ -504,8 +480,7 @@ pub fn encode_list<T: Encoder>(
         DataType::Interval(interval_unit) => match interval_unit {
             IntervalUnit::YearMonth => {
                 let value: Vec<Option<PgInterval>> = arr
-                    .as_any()
-                    .downcast_ref::<IntervalYearMonthArray>()
+                    .as_any().downcast_ref::<IntervalYearMonthArray>()
                     .unwrap()
                     .iter()
                     .map(|val| val.map(|v| PgInterval::new(v, 0, 0)))
@@ -515,8 +490,7 @@ pub fn encode_list<T: Encoder>(
             }
             IntervalUnit::DayTime => {
                 let value: Vec<Option<PgInterval>> = arr
-                    .as_any()
-                    .downcast_ref::<IntervalDayTimeArray>()
+                    .as_any().downcast_ref::<IntervalDayTimeArray>()
                     .unwrap()
                     .iter()
                     .map(|val| {
@@ -531,8 +505,7 @@ pub fn encode_list<T: Encoder>(
             }
             IntervalUnit::MonthDayNano => {
                 let value: Vec<Option<PgInterval>> = arr
-                    .as_any()
-                    .downcast_ref::<IntervalMonthDayNanoArray>()
+                    .as_any().downcast_ref::<IntervalMonthDayNanoArray>()
                     .unwrap()
                     .iter()
                     .map(|val| {

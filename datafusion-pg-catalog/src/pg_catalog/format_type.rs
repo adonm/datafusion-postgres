@@ -266,12 +266,7 @@ impl ScalarUDFImpl for FormatTypeUDF {
 
     fn invoke_with_args(&self, args: ScalarFunctionArgs) -> Result<ColumnarValue, DataFusionError> {
         format_type_impl(&args.args)
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
+    }}
 
 pub fn create_format_type_udf() -> ScalarUDF {
     FormatTypeUDF::new().into_scalar_udf()

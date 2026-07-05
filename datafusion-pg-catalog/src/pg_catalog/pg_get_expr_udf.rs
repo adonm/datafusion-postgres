@@ -64,12 +64,7 @@ impl ScalarUDFImpl for PgGetExprUDF {
         let array: ArrayRef = Arc::new(builder.finish());
 
         Ok(ColumnarValue::Array(array))
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
+    }}
 
 pub fn create_pg_get_expr_udf() -> ScalarUDF {
     PgGetExprUDF::new().into_scalar_udf()

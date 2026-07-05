@@ -365,8 +365,7 @@ async fn map_rows_affected_for_insert(df: &DataFrame) -> PgWireResult<Response> 
         .first()
         .and_then(|batch| batch.column_by_name("count"))
         .and_then(|col| {
-            col.as_any()
-                .downcast_ref::<datafusion::arrow::array::UInt64Array>()
+            col.as_any().downcast_ref::<datafusion::arrow::array::UInt64Array>()
         })
         .map_or(0, |array| array.value(0) as usize);
 

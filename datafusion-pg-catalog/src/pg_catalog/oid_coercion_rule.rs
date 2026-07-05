@@ -381,19 +381,16 @@ mod tests {
             let col = b.column(0);
             let strs: Vec<Option<&str>> = match col.data_type() {
                 DataType::Utf8 => col
-                    .as_any()
                     .downcast_ref::<StringArray>()
                     .unwrap()
                     .iter()
                     .collect(),
                 DataType::LargeUtf8 => col
-                    .as_any()
                     .downcast_ref::<datafusion::arrow::array::GenericStringArray<i64>>()
                     .unwrap()
                     .iter()
                     .collect(),
                 DataType::Utf8View => col
-                    .as_any()
                     .downcast_ref::<StringViewArray>()
                     .unwrap()
                     .iter()

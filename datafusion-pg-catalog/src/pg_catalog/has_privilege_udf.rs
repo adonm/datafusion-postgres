@@ -59,12 +59,7 @@ impl ScalarUDFImpl for PgHasPrivilegeUDF {
         let array: ArrayRef = Arc::new(builder.finish());
 
         Ok(ColumnarValue::Array(array))
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
+    }}
 
 pub fn create_has_privilege_udf(name: &str) -> ScalarUDF {
     PgHasPrivilegeUDF::new(name).into_scalar_udf()

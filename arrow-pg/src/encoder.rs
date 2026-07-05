@@ -70,8 +70,7 @@ impl Encoder for CopyEncoder {
 
 fn get_bool_value(arr: &Arc<dyn Array>, idx: usize) -> Option<bool> {
     (!arr.is_null(idx)).then(|| {
-        arr.as_any()
-            .downcast_ref::<BooleanArray>()
+        arr.as_any().downcast_ref::<BooleanArray>()
             .unwrap()
             .value(idx)
     })
@@ -81,8 +80,7 @@ macro_rules! get_primitive_value {
     ($name:ident, $t:ty, $pt:ty) => {
         fn $name(arr: &Arc<dyn Array>, idx: usize) -> Option<$pt> {
             (!arr.is_null(idx)).then(|| {
-                arr.as_any()
-                    .downcast_ref::<PrimitiveArray<$t>>()
+                arr.as_any().downcast_ref::<PrimitiveArray<$t>>()
                     .unwrap()
                     .value(idx)
             })
@@ -107,8 +105,7 @@ get_primitive_value!(get_f64_value, Float64Type, f64);
 
 fn get_utf8_view_value(arr: &Arc<dyn Array>, idx: usize) -> Option<&str> {
     (!arr.is_null(idx)).then(|| {
-        arr.as_any()
-            .downcast_ref::<StringViewArray>()
+        arr.as_any().downcast_ref::<StringViewArray>()
             .unwrap()
             .value(idx)
     })
@@ -116,8 +113,7 @@ fn get_utf8_view_value(arr: &Arc<dyn Array>, idx: usize) -> Option<&str> {
 
 fn get_binary_view_value(arr: &Arc<dyn Array>, idx: usize) -> Option<&[u8]> {
     (!arr.is_null(idx)).then(|| {
-        arr.as_any()
-            .downcast_ref::<BinaryViewArray>()
+        arr.as_any().downcast_ref::<BinaryViewArray>()
             .unwrap()
             .value(idx)
     })
@@ -125,8 +121,7 @@ fn get_binary_view_value(arr: &Arc<dyn Array>, idx: usize) -> Option<&[u8]> {
 
 fn get_utf8_value(arr: &Arc<dyn Array>, idx: usize) -> Option<&str> {
     (!arr.is_null(idx)).then(|| {
-        arr.as_any()
-            .downcast_ref::<StringArray>()
+        arr.as_any().downcast_ref::<StringArray>()
             .unwrap()
             .value(idx)
     })
@@ -134,8 +129,7 @@ fn get_utf8_value(arr: &Arc<dyn Array>, idx: usize) -> Option<&str> {
 
 fn get_large_utf8_value(arr: &Arc<dyn Array>, idx: usize) -> Option<&str> {
     (!arr.is_null(idx)).then(|| {
-        arr.as_any()
-            .downcast_ref::<LargeStringArray>()
+        arr.as_any().downcast_ref::<LargeStringArray>()
             .unwrap()
             .value(idx)
     })
@@ -143,8 +137,7 @@ fn get_large_utf8_value(arr: &Arc<dyn Array>, idx: usize) -> Option<&str> {
 
 fn get_binary_value(arr: &Arc<dyn Array>, idx: usize) -> Option<&[u8]> {
     (!arr.is_null(idx)).then(|| {
-        arr.as_any()
-            .downcast_ref::<BinaryArray>()
+        arr.as_any().downcast_ref::<BinaryArray>()
             .unwrap()
             .value(idx)
     })
@@ -152,8 +145,7 @@ fn get_binary_value(arr: &Arc<dyn Array>, idx: usize) -> Option<&[u8]> {
 
 fn get_large_binary_value(arr: &Arc<dyn Array>, idx: usize) -> Option<&[u8]> {
     (!arr.is_null(idx)).then(|| {
-        arr.as_any()
-            .downcast_ref::<LargeBinaryArray>()
+        arr.as_any().downcast_ref::<LargeBinaryArray>()
             .unwrap()
             .value(idx)
     })
@@ -163,8 +155,7 @@ fn get_date32_value(arr: &Arc<dyn Array>, idx: usize) -> Option<NaiveDate> {
     if arr.is_null(idx) {
         return None;
     }
-    arr.as_any()
-        .downcast_ref::<Date32Array>()
+    arr.as_any().downcast_ref::<Date32Array>()
         .unwrap()
         .value_as_date(idx)
 }
@@ -173,8 +164,7 @@ fn get_date64_value(arr: &Arc<dyn Array>, idx: usize) -> Option<NaiveDate> {
     if arr.is_null(idx) {
         return None;
     }
-    arr.as_any()
-        .downcast_ref::<Date64Array>()
+    arr.as_any().downcast_ref::<Date64Array>()
         .unwrap()
         .value_as_date(idx)
 }
@@ -183,8 +173,7 @@ fn get_time32_second_value(arr: &Arc<dyn Array>, idx: usize) -> Option<NaiveTime
     if arr.is_null(idx) {
         return None;
     }
-    arr.as_any()
-        .downcast_ref::<Time32SecondArray>()
+    arr.as_any().downcast_ref::<Time32SecondArray>()
         .unwrap()
         .value_as_time(idx)
 }
@@ -193,8 +182,7 @@ fn get_time32_millisecond_value(arr: &Arc<dyn Array>, idx: usize) -> Option<Naiv
     if arr.is_null(idx) {
         return None;
     }
-    arr.as_any()
-        .downcast_ref::<Time32MillisecondArray>()
+    arr.as_any().downcast_ref::<Time32MillisecondArray>()
         .unwrap()
         .value_as_time(idx)
 }
@@ -203,8 +191,7 @@ fn get_time64_microsecond_value(arr: &Arc<dyn Array>, idx: usize) -> Option<Naiv
     if arr.is_null(idx) {
         return None;
     }
-    arr.as_any()
-        .downcast_ref::<Time64MicrosecondArray>()
+    arr.as_any().downcast_ref::<Time64MicrosecondArray>()
         .unwrap()
         .value_as_time(idx)
 }
@@ -212,8 +199,7 @@ fn get_time64_nanosecond_value(arr: &Arc<dyn Array>, idx: usize) -> Option<Naive
     if arr.is_null(idx) {
         return None;
     }
-    arr.as_any()
-        .downcast_ref::<Time64NanosecondArray>()
+    arr.as_any().downcast_ref::<Time64NanosecondArray>()
         .unwrap()
         .value_as_time(idx)
 }
@@ -356,8 +342,7 @@ pub fn encode_value<T: Encoder>(
                     return encoder.encode_field(&None::<NaiveDateTime>, pg_field);
                 }
                 let ts_array = arr
-                    .as_any()
-                    .downcast_ref::<TimestampMillisecondArray>()
+                    .as_any().downcast_ref::<TimestampMillisecondArray>()
                     .unwrap();
                 if let Some(tz) = timezone {
                     let tz = Tz::from_str(tz.as_ref()).map_err(ToSqlError::from)?;
@@ -375,8 +360,7 @@ pub fn encode_value<T: Encoder>(
                     return encoder.encode_field(&None::<NaiveDateTime>, pg_field);
                 }
                 let ts_array = arr
-                    .as_any()
-                    .downcast_ref::<TimestampMicrosecondArray>()
+                    .as_any().downcast_ref::<TimestampMicrosecondArray>()
                     .unwrap();
                 if let Some(tz) = timezone {
                     let tz = Tz::from_str(tz.as_ref()).map_err(ToSqlError::from)?;
@@ -394,8 +378,7 @@ pub fn encode_value<T: Encoder>(
                     return encoder.encode_field(&None::<NaiveDateTime>, pg_field);
                 }
                 let ts_array = arr
-                    .as_any()
-                    .downcast_ref::<TimestampNanosecondArray>()
+                    .as_any().downcast_ref::<TimestampNanosecondArray>()
                     .unwrap();
                 if let Some(tz) = timezone {
                     let tz = Tz::from_str(tz.as_ref()).map_err(ToSqlError::from)?;
@@ -412,8 +395,7 @@ pub fn encode_value<T: Encoder>(
         DataType::Interval(interval_unit) => match interval_unit {
             IntervalUnit::YearMonth => {
                 let interval_array = arr
-                    .as_any()
-                    .downcast_ref::<IntervalYearMonthArray>()
+                    .as_any().downcast_ref::<IntervalYearMonthArray>()
                     .unwrap();
                 let months = IntervalYearMonthType::to_months(interval_array.value(idx));
                 encoder.encode_field(&PgInterval::new(months, 0, 0), pg_field)?;
@@ -426,8 +408,7 @@ pub fn encode_value<T: Encoder>(
             }
             IntervalUnit::MonthDayNano => {
                 let interval_array = arr
-                    .as_any()
-                    .downcast_ref::<IntervalMonthDayNanoArray>()
+                    .as_any().downcast_ref::<IntervalMonthDayNanoArray>()
                     .unwrap();
                 let (months, days, nanoseconds) =
                     IntervalMonthDayNanoType::to_parts(interval_array.value(idx));
@@ -452,8 +433,7 @@ pub fn encode_value<T: Encoder>(
                     return encoder.encode_field(&None::<PgInterval>, pg_field);
                 }
                 let duration_array = arr
-                    .as_any()
-                    .downcast_ref::<DurationMillisecondArray>()
+                    .as_any().downcast_ref::<DurationMillisecondArray>()
                     .unwrap();
                 let microseconds = duration_array.value(idx) * 1_000i64;
                 encoder.encode_field(&PgInterval::new(0, 0, microseconds), pg_field)?;
@@ -463,8 +443,7 @@ pub fn encode_value<T: Encoder>(
                     return encoder.encode_field(&None::<PgInterval>, pg_field);
                 }
                 let duration_array = arr
-                    .as_any()
-                    .downcast_ref::<DurationMicrosecondArray>()
+                    .as_any().downcast_ref::<DurationMicrosecondArray>()
                     .unwrap();
                 let microseconds = duration_array.value(idx);
                 encoder.encode_field(&PgInterval::new(0, 0, microseconds), pg_field)?;
@@ -474,8 +453,7 @@ pub fn encode_value<T: Encoder>(
                     return encoder.encode_field(&None::<PgInterval>, pg_field);
                 }
                 let duration_array = arr
-                    .as_any()
-                    .downcast_ref::<DurationNanosecondArray>()
+                    .as_any().downcast_ref::<DurationNanosecondArray>()
                     .unwrap();
                 let microseconds = duration_array.value(idx) / 1_000i64;
                 encoder.encode_field(&PgInterval::new(0, 0, microseconds), pg_field)?;
@@ -496,8 +474,7 @@ pub fn encode_value<T: Encoder>(
             // Get the dictionary values and the mapped row index
             macro_rules! get_dict_values_and_index {
                 ($key_type:ty) => {
-                    arr.as_any()
-                        .downcast_ref::<DictionaryArray<$key_type>>()
+                    arr.as_any().downcast_ref::<DictionaryArray<$key_type>>()
                         .map(|dict| (dict.values(), dict.keys().value(idx) as usize))
                 };
             }
