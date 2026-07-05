@@ -980,6 +980,43 @@ fn rewrite_pg_overlap_set_expr(expr: &mut sqlparser::ast::SetExpr) {
             for expr in select.projection.iter_mut() {
                 rewrite_pg_overlap_select_item(expr);
             }
+            for table in select.from.iter_mut() {
+                rewrite_pg_overlap_table_with_joins(table);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn rewrite_pg_overlap_table_with_joins(table: &mut sqlparser::ast::TableWithJoins) {
+    rewrite_pg_overlap_table_factor(&mut table.relation);
+    for join in table.joins.iter_mut() {
+        rewrite_pg_overlap_table_factor(&mut join.relation);
+        match &mut join.join_operator {
+            sqlparser::ast::JoinOperator::Inner(constraint)
+            | sqlparser::ast::JoinOperator::LeftOuter(constraint)
+            | sqlparser::ast::JoinOperator::RightOuter(constraint)
+            | sqlparser::ast::JoinOperator::FullOuter(constraint)
+            | sqlparser::ast::JoinOperator::LeftSemi(constraint)
+            | sqlparser::ast::JoinOperator::RightSemi(constraint)
+            | sqlparser::ast::JoinOperator::LeftAnti(constraint)
+            | sqlparser::ast::JoinOperator::RightAnti(constraint) => {
+                if let sqlparser::ast::JoinConstraint::On(expr) = constraint {
+                    rewrite_pg_overlap_expr(expr);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn rewrite_pg_overlap_table_factor(factor: &mut sqlparser::ast::TableFactor) {
+    match factor {
+        sqlparser::ast::TableFactor::Derived { subquery, .. } => {
+            rewrite_pg_overlap_query(subquery);
+        }
+        sqlparser::ast::TableFactor::NestedJoin { table_with_joins, .. } => {
+            rewrite_pg_overlap_table_with_joins(table_with_joins);
         }
         _ => {}
     }
