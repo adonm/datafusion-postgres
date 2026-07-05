@@ -495,7 +495,9 @@ fn ordered_param_types(types: &HashMap<String, Option<DataType>>) -> Vec<Option<
 fn preprocess_quackgis_sql(sql: &str) -> String {
     // Preprocess PostGIS-specific syntax that DataFusion's parser/planner
     // doesn't understand. Low-maintenance string-level transforms for
-    // patterns that have exact semantic equivalents in QuackGIS.
+    // patterns that have exact semantic equivalents in DataFusion.
+    let sql = rewrite_postgis_ddl(&sql);
+
     let sql = sql
         .replace("::geometry", "::bytea")
         .replace("::Geometry", "::bytea")
@@ -561,6 +563,69 @@ fn is_martin_available_functions_query(sql: &str) -> bool {
         && sql.contains("information_schema.routines")
         && sql.contains("information_schema.parameters")
         && sql.contains("inputs.input_types ->> 0")
+}
+
+/// Rewrite PostGIS/PostgreSQL DDL that DataFusion's parser cannot handle.
+///
+/// - `CREATE EXTENSION ...` → `SELECT 1 WHERE FALSE` (no-op)
+/// - `DO $$ ... $$` PL/pgSQL blocks → no-op
+/// - `CREATE INDEX ...` and `CLUSTER ...` → no-op (QuackGIS has no GiST yet)
+/// - `COMMENT ON ...` → no-op
+/// - `CREATE MATERIALIZED VIEW ...` → `CREATE VIEW ...`
+/// - `serial` / `bigserial` column types → `int` / `bigint`
+/// - `GEOMETRY(type, srid)` / `geography(type, srid)` column types → `BYTEA`
+fn rewrite_postgis_ddl(sql: &str) -> String {
+    use regex::Regex;
+    use std::sync::OnceLock;
+
+    static CREATE_EXT_RE: OnceLock<Regex> = OnceLock::new();
+    static DO_BLOCK_RE: OnceLock<Regex> = OnceLock::new();
+    static CREATE_INDEX_RE: OnceLock<Regex> = OnceLock::new();
+    static CLUSTER_RE: OnceLock<Regex> = OnceLock::new();
+    static COMMENT_ON_RE: OnceLock<Regex> = OnceLock::new();
+    static CREATE_MATERIALIZED_VIEW_RE: OnceLock<Regex> = OnceLock::new();
+    static GEOMETRY_TYPE_RE: OnceLock<Regex> = OnceLock::new();
+    static SERIAL_RE: OnceLock<Regex> = OnceLock::new();
+
+    let create_ext = CREATE_EXT_RE.get_or_init(|| {
+        Regex::new(r"(?i)\bCREATE\s+EXTENSION\s+IF\s+NOT\s+EXISTS\s+\w+\s*;|\bCREATE\s+EXTENSION\s+\w+\s*;")
+            .unwrap()
+    });
+    let do_block = DO_BLOCK_RE.get_or_init(|| {
+        Regex::new(r"(?is)\bDO\s+\$[\w$]*\$.*?\$[\w$]*\s*;").unwrap()
+    });
+    let create_index = CREATE_INDEX_RE.get_or_init(|| {
+        Regex::new(r"(?is)\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?.*?;").unwrap()
+    });
+    let cluster = CLUSTER_RE.get_or_init(|| Regex::new(r"(?is)\bCLUSTER\s+.*?;").unwrap());
+    let comment_on = COMMENT_ON_RE
+        .get_or_init(|| Regex::new(r"(?is)\bCOMMENT\s+ON\s+.*?;").unwrap());
+    let create_materialized_view = CREATE_MATERIALIZED_VIEW_RE
+        .get_or_init(|| Regex::new(r"(?i)\bCREATE\s+MATERIALIZED\s+VIEW\b").unwrap());
+    let geom_type = GEOMETRY_TYPE_RE.get_or_init(|| {
+        Regex::new(r"(?i)\bGEOMETRY\s*\([^)]*\)|\bGEOMETRY\b|\bGEOGRAPHY\s*\([^)]*\)|\bGEOGRAPHY\b")
+            .unwrap()
+    });
+    let serial = SERIAL_RE
+        .get_or_init(|| Regex::new(r"(?i)\bbigserial\b|\bserial\b").unwrap());
+
+    let sql = create_ext.replace_all(&sql, "SELECT 1 WHERE FALSE;");
+    let sql = do_block.replace_all(&sql, "SELECT 1 WHERE FALSE;");
+    let sql = create_index.replace_all(&sql, "SELECT 1 WHERE FALSE;");
+    let sql = cluster.replace_all(&sql, "SELECT 1 WHERE FALSE;");
+    let sql = comment_on.replace_all(&sql, "SELECT 1 WHERE FALSE;");
+    let sql = create_materialized_view.replace_all(&sql, "CREATE VIEW");
+    let sql = geom_type.replace_all(&sql, "BYTEA");
+    let sql = serial.replace_all(&sql, |caps: &regex::Captures| {
+        let matched = caps[0].to_lowercase();
+        if matched == "bigserial" {
+            "bigint"
+        } else {
+            "int"
+        }
+    });
+
+    sql.into_owned()
 }
 
 #[cfg(test)]
@@ -640,6 +705,89 @@ mod tests {
         assert_eq!(
             preprocess_quackgis_sql(sql),
             "SELECT ST_TileEnvelope($1::integer, $2::integer, $3::integer, 0.015625)"
+        );
+    }
+
+    #[test]
+    fn test_rewrite_postgis_ddl_creates_table_with_geometry_and_serial() {
+        let sql = "CREATE TABLE table_source (\n    gid serial PRIMARY KEY, geom GEOMETRY (GEOMETRY, 4326)\n)";
+        let result = rewrite_postgis_ddl(sql);
+        assert!(
+            result.contains("int"),
+            "serial should be replaced: {result}"
+        );
+        assert!(
+            result.contains("BYTEA"),
+            "GEOMETRY should be replaced: {result}"
+        );
+        assert!(
+            !result.to_lowercase().contains("serial"),
+            "no serial should remain: {result}"
+        );
+        assert!(
+            !result.to_lowercase().contains("geometry"),
+            "no geometry type should remain: {result}"
+        );
+    }
+
+    #[test]
+    fn test_rewrite_postgis_ddl_skips_create_extension() {
+        let sql = "CREATE EXTENSION IF NOT EXISTS postgis; CREATE TABLE foo (x int);";
+        let result = rewrite_postgis_ddl(sql);
+        assert!(
+            result.contains("SELECT 1 WHERE FALSE"),
+            "CREATE EXTENSION should be no-op: {result}"
+        );
+        assert!(
+            result.contains("CREATE TABLE foo"),
+            "CREATE TABLE should be preserved: {result}"
+        );
+    }
+
+    #[test]
+    fn test_rewrite_postgis_ddl_skips_do_blocks() {
+        let sql = "DO $do$ BEGIN EXECUTE 'COMMENT ON TABLE foo'; END $do$;";
+        let result = rewrite_postgis_ddl(sql);
+        assert!(
+            result.contains("SELECT 1 WHERE FALSE"),
+            "DO block should be no-op: {result}"
+        );
+    }
+
+    #[test]
+    fn test_rewrite_postgis_ddl_handles_geography_type() {
+        let sql = "CREATE TABLE t (geom geography(Point, 4326))";
+        let result = rewrite_postgis_ddl(sql);
+        assert!(
+            result.contains("BYTEA"),
+            "geography should be replaced: {result}"
+        );
+    }
+
+    #[test]
+    fn test_rewrite_postgis_ddl_skips_index_and_cluster() {
+        let sql = "CREATE INDEX CONCURRENTLY ON points1 USING gist (geom); CLUSTER points1_geom_idx ON points1;";
+        let result = rewrite_postgis_ddl(sql);
+        assert_eq!(
+            result,
+            "SELECT 1 WHERE FALSE; SELECT 1 WHERE FALSE;"
+        );
+    }
+
+    #[test]
+    fn test_rewrite_postgis_ddl_materialized_view_as_view() {
+        let sql = "CREATE MATERIALIZED VIEW mat_view AS SELECT 1 AS id";
+        let result = rewrite_postgis_ddl(sql);
+        assert_eq!(result, "CREATE VIEW mat_view AS SELECT 1 AS id");
+    }
+
+    #[test]
+    fn test_rewrite_postgis_ddl_skips_comments() {
+        let sql = "COMMENT ON TABLE points2 IS 'A table with points'; COMMENT ON COLUMN points2.geom IS 'The geometry column';";
+        let result = rewrite_postgis_ddl(sql);
+        assert_eq!(
+            result,
+            "SELECT 1 WHERE FALSE; SELECT 1 WHERE FALSE;"
         );
     }
 
