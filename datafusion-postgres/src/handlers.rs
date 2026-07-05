@@ -178,7 +178,10 @@ impl SimpleQueryHandler for DfSessionService {
             .replace("::GEOMETRY", "::bytea")
             .replace("::geography", "::bytea")
             .replace("::Geography", "::bytea")
-            .replace("::GEOGRAPHY", "::bytea");
+            .replace("::GEOGRAPHY", "::bytea")
+            .replace("::jsonb", "::varchar")
+            .replace("::Jsonb", "::varchar")
+            .replace("::JSONB", "::varchar");
 
         let mut statements = self
             .parser
@@ -415,7 +418,10 @@ impl QueryParser for Parser {
             .replace("::GEOMETRY", "::bytea")
             .replace("::geography", "::bytea")
             .replace("::Geography", "::bytea")
-            .replace("::GEOGRAPHY", "::bytea");
+            .replace("::GEOGRAPHY", "::bytea")
+            .replace("::jsonb", "::varchar")
+            .replace("::Jsonb", "::varchar")
+            .replace("::JSONB", "::varchar");
         let mut statements = self
             .sql_parser
             .parse(&sql)
