@@ -347,6 +347,18 @@ where
                     }
                 }
             }
+            Type::OID => {
+                let value = portal.parameter::<u32>(i, &pg_type)?;
+                match inferenced_type {
+                    Some(target) => {
+                        deserialized_params
+                            .push(coerce_int_value(value.map(|n| n as i64), target)?);
+                    }
+                    None => {
+                        deserialized_params.push(ScalarValue::UInt32(value));
+                    }
+                }
+            }
             Type::INT8 => {
                 let value = portal.parameter::<i64>(i, &pg_type)?;
                 match inferenced_type {

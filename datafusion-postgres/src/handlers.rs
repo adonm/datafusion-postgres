@@ -436,7 +436,10 @@ impl QueryParser for Parser {
     }
 
     fn get_parameter_types(&self, stmt: &Self::Statement) -> PgWireResult<Vec<Type>> {
-        if let (_, Some((_, plan))) = stmt {
+        if let (query, Some((_, plan))) = stmt {
+            if let Some(types) = postgres_catalog_oid_parameter_types(query) {
+                return Ok(types);
+            }
             let params = planner::get_inferred_parameter_types(plan)
                 .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
 
@@ -478,6 +481,31 @@ impl QueryParser for Parser {
             Ok(vec![])
         }
     }
+}
+
+fn postgres_catalog_oid_parameter_types(query: &str) -> Option<Vec<Type>> {
+    let normalized = query
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase();
+
+    // tokio-postgres resolves unknown type OIDs by preparing internal catalog
+    // lookups whose `$1` parameter is an OID. DataFusion infers those columns as
+    // Int32 because the backing Arrow tables store raw oid values as Int32, but
+    // PostgreSQL advertises the parameter as `oid`; without this override the
+    // client tries to serialize a Rust u32 into int4 and fails before binding.
+    if (normalized.contains("from pg_catalog.pg_type t")
+        && normalized.contains("where t.oid = $1"))
+        || (normalized.contains("from pg_catalog.pg_enum")
+            && normalized.contains("where enumtypid = $1"))
+        || (normalized.contains("from pg_catalog.pg_attribute")
+            && normalized.contains("where attrelid = $1"))
+    {
+        return Some(vec![Type::OID]);
+    }
+
+    None
 }
 
 fn ordered_param_types(types: &HashMap<String, Option<DataType>>) -> Vec<Option<&DataType>> {

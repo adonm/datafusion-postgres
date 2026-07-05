@@ -17,6 +17,24 @@ use postgres_types::Kind;
 
 use crate::row_encoder::RowEncoder;
 
+const OID_ALIAS_METADATA_KEY: &str = "pg.oid_alias";
+const OID_COLUMN_NAMES: &[&str] = &[
+    "oid",
+    "typelem",
+    "rngsubtype",
+    "typbasetype",
+    "typrelid",
+    "typnamespace",
+    "enumtypid",
+    "attrelid",
+    "atttypid",
+    "relnamespace",
+    "reltype",
+    "reloftype",
+    "reltoastrelid",
+    "relrewrite",
+];
+
 /// PostgreSQL type OID advertised for PostGIS-style `geometry` columns.
 ///
 /// PostGIS assigns the `geometry`/`geography` type OIDs dynamically when the
@@ -55,6 +73,11 @@ pub fn is_geometry_column_name(name: &str) -> bool {
 pub fn is_geography_column_name(name: &str) -> bool {
     let lower = name.to_lowercase();
     GEOGRAPHY_COLUMN_NAMES.contains(&lower.as_str())
+}
+
+fn is_oid_column_name(name: &str) -> bool {
+    let lower = name.to_lowercase();
+    OID_COLUMN_NAMES.contains(&lower.as_str())
 }
 
 pub fn is_binary_arrow_type(dt: &DataType) -> bool {
@@ -194,6 +217,25 @@ pub fn into_pg_type(arrow_type: &DataType) -> PgWireResult<Type> {
 
 pub fn field_into_pg_type(field: &Arc<Field>) -> PgWireResult<Type> {
     let arrow_type = field.data_type();
+
+    // pg_catalog stores oid/oid-alias values as Arrow Int32 columns, annotated
+    // with metadata by datafusion-pg-catalog. PostgreSQL advertises those
+    // columns as `oid` on the wire, not plain int4; tokio-postgres relies on
+    // that when resolving unknown extension/custom type OIDs via pg_type.
+    if matches!(arrow_type, DataType::Int32 | DataType::UInt32)
+        && (field.metadata().contains_key(OID_ALIAS_METADATA_KEY)
+            || is_oid_column_name(field.name()))
+    {
+        return Ok(Type::OID);
+    }
+
+    if matches!(
+        arrow_type,
+        DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View
+    ) && field.name().eq_ignore_ascii_case("typtype")
+    {
+        return Ok(Type::CHAR);
+    }
 
     // PostGIS-compat: binary columns whose name matches the geometry/geography
     // convention are advertised with a dedicated type OID (instead of bytea)
