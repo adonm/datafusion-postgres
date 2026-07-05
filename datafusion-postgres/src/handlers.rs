@@ -166,10 +166,24 @@ impl SimpleQueryHandler for DfSessionService {
     {
         log::debug!("Received query: {query}");
 
+        // Preprocess PostGIS-specific syntax that DataFusion's parser/planner
+        // doesn't understand. Low-maintenance string-level transforms for
+        // patterns that have exact semantic equivalents in DataFusion.
+        // — ::geometry / ::geography → ::bytea (WKB IS bytea; the type
+        //   difference only matters for pg_type introspection, not for data
+        //   transfer, and QuackGIS registers geometry_columns separately).
+        let query = query
+            .replace("::geometry", "::bytea")
+            .replace("::Geometry", "::bytea")
+            .replace("::GEOMETRY", "::bytea")
+            .replace("::geography", "::bytea")
+            .replace("::Geography", "::bytea")
+            .replace("::GEOGRAPHY", "::bytea");
+
         let statements = self
             .parser
             .sql_parser
-            .parse(query)
+            .parse(&query)
             .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
 
         // empty query
@@ -394,12 +408,19 @@ impl QueryParser for Parser {
         C: ClientInfo + Unpin + Send + Sync,
     {
         log::debug!("Received parse extended query: {sql}");
+        let sql = sql
+            .replace("::geometry", "::bytea")
+            .replace("::Geometry", "::bytea")
+            .replace("::GEOMETRY", "::bytea")
+            .replace("::geography", "::bytea")
+            .replace("::Geography", "::bytea")
+            .replace("::GEOGRAPHY", "::bytea");
         let mut statements = self
             .sql_parser
-            .parse(sql)
+            .parse(&sql)
             .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
         if statements.is_empty() {
-            return Ok((sql.to_string(), None));
+            return Ok((sql, None));
         }
 
         let statement = statements.remove(0);
