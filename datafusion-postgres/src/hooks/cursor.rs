@@ -128,12 +128,22 @@ async fn handle_declare(
             }
         };
 
+        // Honor the BINARY keyword (DECLARE <name> BINARY CURSOR FOR ...).
+        // Default is text per PostgreSQL. Binary cursors return data in the
+        // binary wire format, which clients like QGIS use to skip hex
+        // decoding of WKB. QuackGIS G3 finding.
+        let result_format = if declare.binary == Some(true) {
+            Format::UnifiedBinary
+        } else {
+            Format::UnifiedText
+        };
+
         let df = session_context
             .sql(&for_query)
             .await
             .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
 
-        let query_response = df::encode_dataframe(df, &Format::UnifiedText, None).await?;
+        let query_response = df::encode_dataframe(df, &result_format, None).await?;
 
         let stored_stmt = Arc::new(StoredStatement::new(
             cursor_name.clone(),
@@ -141,7 +151,11 @@ async fn handle_declare(
             vec![],
         ));
 
-        let portal = Portal::new_cursor(cursor_name.clone(), stored_stmt);
+        let mut portal = Portal::new_cursor(cursor_name.clone(), stored_stmt);
+        // Keep the portal's declared result format in sync with how the rows
+        // were encoded above; otherwise FETCH would re-describe them as text
+        // and the binary bytes wouldn't round-trip correctly.
+        portal.result_column_format = result_format;
 
         portal.start(query_response).await;
 
