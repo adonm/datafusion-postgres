@@ -224,14 +224,14 @@ fn oid_kind(col: &Column, schema: &DFSchemaRef) -> Option<String> {
 
 /// If `e` is a string literal, return its value; otherwise `None`.
 fn as_str_literal(e: &Expr) -> Option<&str> {
-    if let Expr::Literal(s, _) = e {
-        match s {
+    match e {
+        Expr::Literal(s, _) => match s {
             ScalarValue::Utf8(Some(s)) | ScalarValue::LargeUtf8(Some(s)) => Some(s.as_str()),
             ScalarValue::Utf8View(Some(s)) => Some(s.as_str()),
             _ => None,
-        }
-    } else {
-        None
+        },
+        Expr::Cast(Cast { expr, .. }) | Expr::TryCast(TryCast { expr, .. }) => as_str_literal(expr),
+        _ => None,
     }
 }
 
@@ -328,29 +328,29 @@ mod tests {
             Some("relnamespace".to_string())
         );
 
-        let cast = Expr::Cast(Cast {
-            expr: Box::new(Expr::Column(Column::new_unqualified("relnamespace"))),
-            data_type: DataType::Utf8,
-        });
+        let cast = Expr::Cast(Cast::new(
+            Box::new(Expr::Column(Column::new_unqualified("relnamespace"))),
+            DataType::Utf8,
+        ));
         assert_eq!(
             unwrap_column(&cast).map(|c| c.name().to_string()),
             Some("relnamespace".to_string())
         );
 
-        let trycast = Expr::TryCast(TryCast {
-            expr: Box::new(Expr::Column(Column::new_unqualified("oid"))),
-            data_type: DataType::Utf8,
-        });
+        let trycast = Expr::TryCast(TryCast::new(
+            Box::new(Expr::Column(Column::new_unqualified("oid"))),
+            DataType::Utf8,
+        ));
         assert_eq!(
             unwrap_column(&trycast).map(|c| c.name().to_string()),
             Some("oid".to_string())
         );
 
         // a cast around something that isn't a column is not unwrapped
-        let nested = Expr::Cast(Cast {
-            expr: Box::new(Expr::Literal(ScalarValue::Int32(Some(1)), None)),
-            data_type: DataType::Utf8,
-        });
+        let nested = Expr::Cast(Cast::new(
+            Box::new(Expr::Literal(ScalarValue::Int32(Some(1)), None)),
+            DataType::Utf8,
+        ));
         assert_eq!(unwrap_column(&nested), None);
     }
 
@@ -381,16 +381,19 @@ mod tests {
             let col = b.column(0);
             let strs: Vec<Option<&str>> = match col.data_type() {
                 DataType::Utf8 => col
+                    .as_any()
                     .downcast_ref::<StringArray>()
                     .unwrap()
                     .iter()
                     .collect(),
                 DataType::LargeUtf8 => col
+                    .as_any()
                     .downcast_ref::<datafusion::arrow::array::GenericStringArray<i64>>()
                     .unwrap()
                     .iter()
                     .collect(),
                 DataType::Utf8View => col
+                    .as_any()
                     .downcast_ref::<StringViewArray>()
                     .unwrap()
                     .iter()
