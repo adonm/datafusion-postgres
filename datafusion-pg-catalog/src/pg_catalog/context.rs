@@ -25,14 +25,17 @@ impl<T> PgCatalogContextProvider for Arc<T>
 where
     T: PgCatalogContextProvider,
 {
-    // retrieve all database role names
+    // NOTE: delegate via deref, NOT `self.roles()`. The trait method resolves
+    // on `Arc<T>` itself, so a bare `self.roles().await` infinite-recurses
+    // through this same impl (stack overflow observed when anything touches
+    // pg_catalog.pg_roles with an `Arc<AuthManager>` context provider —
+    // QuackGIS G2 probe finding, see ROADMAP.md).
     async fn roles(&self) -> Vec<String> {
-        self.roles().await
+        (**self).roles().await
     }
 
-    // retrieve database role information
     async fn role(&self, name: &str) -> Option<Role> {
-        self.role(name).await
+        (**self).role(name).await
     }
 }
 
