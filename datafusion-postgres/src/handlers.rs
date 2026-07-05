@@ -172,16 +172,7 @@ impl SimpleQueryHandler for DfSessionService {
         // — ::geometry / ::geography → ::bytea (WKB IS bytea; the type
         //   difference only matters for pg_type introspection, not for data
         //   transfer, and QuackGIS registers geometry_columns separately).
-        let query = query
-            .replace("::geometry", "::bytea")
-            .replace("::Geometry", "::bytea")
-            .replace("::GEOMETRY", "::bytea")
-            .replace("::geography", "::bytea")
-            .replace("::Geography", "::bytea")
-            .replace("::GEOGRAPHY", "::bytea")
-            .replace("::jsonb", "::varchar")
-            .replace("::Jsonb", "::varchar")
-            .replace("::JSONB", "::varchar");
+        let query = preprocess_quackgis_sql(&query);
 
         let mut statements = self
             .parser
@@ -412,16 +403,7 @@ impl QueryParser for Parser {
         C: ClientInfo + Unpin + Send + Sync,
     {
         log::debug!("Received parse extended query: {sql}");
-        let sql = sql
-            .replace("::geometry", "::bytea")
-            .replace("::Geometry", "::bytea")
-            .replace("::GEOMETRY", "::bytea")
-            .replace("::geography", "::bytea")
-            .replace("::Geography", "::bytea")
-            .replace("::GEOGRAPHY", "::bytea")
-            .replace("::jsonb", "::varchar")
-            .replace("::Jsonb", "::varchar")
-            .replace("::JSONB", "::varchar");
+        let sql = preprocess_quackgis_sql(sql);
         let mut statements = self
             .sql_parser
             .parse(&sql)
@@ -508,6 +490,49 @@ fn ordered_param_types(types: &HashMap<String, Option<DataType>>) -> Vec<Option<
             .unwrap_or(u32::MAX)
     });
     types.into_iter().map(|pt| pt.1.as_ref()).collect()
+}
+
+fn preprocess_quackgis_sql(sql: &str) -> String {
+    // Preprocess PostGIS-specific syntax that DataFusion's parser/planner
+    // doesn't understand. Low-maintenance string-level transforms for
+    // patterns that have exact semantic equivalents in QuackGIS.
+    let sql = sql
+        .replace("::geometry", "::bytea")
+        .replace("::Geometry", "::bytea")
+        .replace("::GEOMETRY", "::bytea")
+        .replace("::geography", "::bytea")
+        .replace("::Geography", "::bytea")
+        .replace("::GEOGRAPHY", "::bytea")
+        .replace("::jsonb", "::varchar")
+        .replace("::Jsonb", "::varchar")
+        .replace("::JSONB", "::varchar");
+
+    if is_martin_available_tables_query(&sql) {
+        return r#"
+SELECT
+    f_table_schema AS schema,
+    f_table_name AS name,
+    f_geometry_column AS geom,
+    srid,
+    type,
+    CAST(114 AS TINYINT) AS relkind,
+    CAST(FALSE AS BOOLEAN) AS geom_idx,
+    CAST(NULL AS VARCHAR) AS description,
+    '{}' AS properties
+FROM geometry_columns
+"#
+        .to_string();
+    }
+
+    sql
+}
+
+fn is_martin_available_tables_query(sql: &str) -> bool {
+    sql.contains("annotated_geometry_columns")
+        && sql.contains("annotated_geography_columns")
+        && sql.contains("jsonb_object_agg")
+        && sql.contains("FROM geometry_columns")
+        && sql.contains("FROM geography_columns")
 }
 
 #[cfg(test)]
