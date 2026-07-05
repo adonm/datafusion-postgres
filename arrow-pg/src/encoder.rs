@@ -13,7 +13,7 @@ use pgwire::error::{ErrorInfo, PgWireError, PgWireResult};
 use pgwire::messages::copy::CopyData;
 use pgwire::messages::data::DataRow;
 use pgwire::types::ToSqlText;
-use postgres_types::ToSql;
+use postgres_types::{Json, ToSql, Type};
 use rust_decimal::Decimal;
 use timezone::Tz;
 
@@ -290,6 +290,11 @@ pub fn encode_value<T: Encoder>(
         DataType::Float64 => encoder.encode_field(&get_f64_value(arr, idx), pg_field)?,
         DataType::Decimal128(_, s) => {
             encoder.encode_field(&get_numeric_128_value(arr, idx, *s as u32)?, pg_field)?
+        }
+        DataType::Utf8 if *pg_field.datatype() == Type::JSONB || *pg_field.datatype() == Type::JSON => {
+            let value = get_utf8_value(arr, idx)
+                .map(|s| serde_json::from_str::<serde_json::Value>(s).unwrap_or(serde_json::Value::Null));
+            encoder.encode_field(&value.map(Json), pg_field)?
         }
         DataType::Utf8 => encoder.encode_field(&get_utf8_value(arr, idx), pg_field)?,
         DataType::Utf8View => encoder.encode_field(&get_utf8_view_value(arr, idx), pg_field)?,

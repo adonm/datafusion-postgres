@@ -155,6 +155,9 @@ pub fn field_into_pg_type(field: &Arc<Field>) -> PgWireResult<Type> {
         #[cfg(feature = "postgis")]
         Some(geoarrow_schema::WkbType::NAME) => Ok(Type::TEXT),
 
+        _ if field.name() == "properties" && matches!(arrow_type, DataType::Utf8) => {
+            Ok(Type::JSONB)
+        }
         _ => into_pg_type(arrow_type),
     }
 }
