@@ -24,7 +24,10 @@ pub fn into_pg_type(arrow_type: &DataType) -> PgWireResult<Type> {
     let datatype = match arrow_type {
         DataType::Null => Type::UNKNOWN,
         DataType::Boolean => Type::BOOL,
-        DataType::Int8 => Type::INT2,
+        // PostgreSQL has no SQL-standard one-byte integer type. Its internal
+        // catalog "char" type (OID 18) is represented by tokio-postgres as
+        // i8 and is used by pg_catalog columns such as pg_class.relkind.
+        DataType::Int8 => Type::CHAR,
         DataType::Int16 | DataType::UInt8 => Type::INT2,
         DataType::Int32 | DataType::UInt16 => Type::INT4,
         DataType::Int64 | DataType::UInt32 => Type::INT8,
