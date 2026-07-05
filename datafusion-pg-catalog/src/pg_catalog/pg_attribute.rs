@@ -138,7 +138,7 @@ impl<C: CatalogInfo> PgAttributeTable<C> {
                                 {
                                     let attnum = (column_idx + 1) as i16; // PostgreSQL column numbers start at 1
                                     let (pg_type_oid, type_len, by_val, align, storage) =
-                                        Self::datafusion_to_pg_type(field.data_type());
+                                        Self::datafusion_field_to_pg_type(field);
 
                                     attrelids.push(table_oid as i32);
                                     attnames.push(field.name().clone());
@@ -229,6 +229,26 @@ impl<C: CatalogInfo> PgAttributeTable<C> {
             Ok(t @ Type::NUMERIC) => (t.oid(), -1, false, "i", "m"),
             _ => (Type::TEXT.oid(), -1, false, "i", "x"), // Default to text for unknown types
         }
+    }
+
+    /// Field-aware variant that also advertises the PostGIS-compat
+    /// geometry/geography type OID for binary columns whose name matches the
+    /// spatial naming convention. Keeps `pg_attribute.atttypid` consistent
+    /// with the RowDescription OID produced by
+    /// [`arrow_pg::datatypes::field_into_pg_type`].
+    fn datafusion_field_to_pg_type(field: &Field) -> (u32, i16, bool, &'static str, &'static str) {
+        let dt = field.data_type();
+        if arrow_pg::datatypes::is_binary_arrow_type(dt)
+            && arrow_pg::datatypes::is_geometry_column_name(field.name())
+        {
+            return (arrow_pg::datatypes::GEOMETRY_OID, -1, false, "i", "x");
+        }
+        if arrow_pg::datatypes::is_binary_arrow_type(dt)
+            && arrow_pg::datatypes::is_geography_column_name(field.name())
+        {
+            return (arrow_pg::datatypes::GEOGRAPHY_OID, -1, false, "i", "x");
+        }
+        Self::datafusion_to_pg_type(dt)
     }
 }
 

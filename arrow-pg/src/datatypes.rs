@@ -17,6 +17,75 @@ use postgres_types::Kind;
 
 use crate::row_encoder::RowEncoder;
 
+/// PostgreSQL type OID advertised for PostGIS-style `geometry` columns.
+///
+/// PostGIS assigns the `geometry`/`geography` type OIDs dynamically when the
+/// extension is created, so there is no universal constant. QuackGIS stores
+/// geometry as WKB inside Arrow `Binary` columns and advertises a fixed,
+/// collision-free sentinel OID on the wire so that clients (QGIS, GeoServer)
+/// which key geometry handling off the RowDescription type OID see a distinct
+/// type from `bytea`. The value is intentionally far outside the builtin
+/// PostgreSQL type-OID range and the runtime `oid_counter` range used by
+/// `datafusion-pg-catalog` for table OIDs.
+pub const GEOMETRY_OID: u32 = 90_001;
+pub const GEOGRAPHY_OID: u32 = 90_002;
+
+/// Column names treated as WKB-encoded PostGIS geometry/geography by
+/// convention when the Arrow type is binary. Mirrors the names used by QGIS,
+/// GDAL, and typical `CREATE TABLE` statements.
+const GEOMETRY_COLUMN_NAMES: &[&str] = &[
+    "geom",
+    "geometry",
+    "the_geom",
+    "wkb_geometry",
+    "wkb_geom",
+    "shape",
+    "way", // OpenStreetMap convention
+];
+
+const GEOGRAPHY_COLUMN_NAMES: &[&str] = &["geog", "geography", "the_geog"];
+
+/// Returns true if `name` matches the geometry-column naming convention.
+pub fn is_geometry_column_name(name: &str) -> bool {
+    let lower = name.to_lowercase();
+    GEOMETRY_COLUMN_NAMES.contains(&lower.as_str())
+}
+
+/// Returns true if `name` matches the geography-column naming convention.
+pub fn is_geography_column_name(name: &str) -> bool {
+    let lower = name.to_lowercase();
+    GEOGRAPHY_COLUMN_NAMES.contains(&lower.as_str())
+}
+
+pub fn is_binary_arrow_type(dt: &DataType) -> bool {
+    matches!(
+        dt,
+        DataType::Binary | DataType::LargeBinary | DataType::BinaryView
+    )
+}
+
+/// Construct the custom PostGIS-compatible `geometry` type used in
+/// RowDescription/FieldInfo. `Kind::Simple` matches PostGIS' base type so
+/// libpq treats the column as a binary-coercible scalar (bytes on the wire).
+pub fn geometry_pg_type() -> Type {
+    Type::new(
+        "geometry".to_string(),
+        GEOMETRY_OID,
+        Kind::Simple,
+        String::new(),
+    )
+}
+
+/// Construct the custom PostGIS-compatible `geography` type.
+pub fn geography_pg_type() -> Type {
+    Type::new(
+        "geography".to_string(),
+        GEOGRAPHY_OID,
+        Kind::Simple,
+        String::new(),
+    )
+}
+
 #[cfg(feature = "datafusion")]
 pub mod df;
 
@@ -126,6 +195,19 @@ pub fn into_pg_type(arrow_type: &DataType) -> PgWireResult<Type> {
 pub fn field_into_pg_type(field: &Arc<Field>) -> PgWireResult<Type> {
     let arrow_type = field.data_type();
 
+    // PostGIS-compat: binary columns whose name matches the geometry/geography
+    // convention are advertised with a dedicated type OID (instead of bytea)
+    // so clients like QGIS/GeoServer recognise them as spatial columns. The
+    // wire encoding is unchanged: arrow-pg still writes the raw WKB bytes
+    // (binary format) or hex-EWKB (text format), both of which are
+    // wire-compatible with PostGIS geometry transport.
+    if is_binary_arrow_type(arrow_type) && is_geometry_column_name(field.name()) {
+        return Ok(geometry_pg_type());
+    }
+    if is_binary_arrow_type(arrow_type) && is_geography_column_name(field.name()) {
+        return Ok(geography_pg_type());
+    }
+
     match field.extension_type_name() {
         // As of arrow 56, there are additional extension logical type that is
         // defined using field metadata, for instance, json or geo.
@@ -191,4 +273,32 @@ pub fn encode_recordbatch(
 ) -> Box<impl Iterator<Item = PgWireResult<DataRow>>> {
     let mut row_stream = RowEncoder::new(record_batch, fields);
     Box::new(std::iter::from_fn(move || row_stream.next_row()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn geometry_named_binary_advertises_geometry_oid() {
+        let field = Arc::new(Field::new("geom", DataType::Binary, true));
+        let ty = field_into_pg_type(&field).expect("geometry field type");
+        assert_eq!(ty.oid(), GEOMETRY_OID);
+        assert_eq!(ty.name(), "geometry");
+    }
+
+    #[test]
+    fn geography_named_binary_advertises_geography_oid() {
+        let field = Arc::new(Field::new("the_geog", DataType::BinaryView, true));
+        let ty = field_into_pg_type(&field).expect("geography field type");
+        assert_eq!(ty.oid(), GEOGRAPHY_OID);
+        assert_eq!(ty.name(), "geography");
+    }
+
+    #[test]
+    fn non_geometry_binary_stays_bytea() {
+        let field = Arc::new(Field::new("payload", DataType::Binary, true));
+        let ty = field_into_pg_type(&field).expect("payload field type");
+        assert_eq!(ty.oid(), Type::BYTEA.oid());
+    }
 }
